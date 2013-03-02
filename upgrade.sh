@@ -18,7 +18,7 @@ do
 done
 
 echo "Installing pre-requisites"
-sudo apt-get install build-essential libc6-dev libssl-dev libgl1-mesa-dev libqt4-dev
+sudo apt-get install build-essential libc6-dev libssl-dev libexpat1-dev libgl1-mesa-dev libqt4-dev
 
 echo "Fetching v$1"
 
