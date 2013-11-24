@@ -1,44 +1,78 @@
 #!/bin/bash -e
+# Installer script for makemkv - installs build dependencies, downloads source, 
+# compiles it, and then installs it.
+
+function usage(){
+    echo "Usage: $0 <version>"
+    echo "E.g. $0 1.7.0"
+}
 
 if [ ${#@} -eq 0 ]
 then
-    echo "Usage: $0 <version>"
-    echo "E.g. $0 1.7.0"
+    usage
     exit 0
 fi
 
-for suffix in bin.tar.gz oss.tar.gz
-do
-    file="makemkv_v${1}_${suffix}"
-    if [ -e ${file} ]
-    then
-        echo "ERROR: File already downloaded: ${file}" >&2
-        exit 1
-    fi
-done
+VERSION=$1; shift;
 
-echo "Installing pre-requisites"
-sudo apt-get install build-essential libc6-dev libssl-dev libexpat1-dev libgl1-mesa-dev libqt4-dev
+if [ ${#@} -gt 0 ]
+then
+    echo "ERROR: Extra arguments found after version number '${VERSION}': ${@}"  >&2
+    usage
+    exit 1
+fi
 
-echo "Fetching v$1"
+function download_sources(){
+    # $1: undecorated version number, e.g. "1.8.6"
+    VERSION=$1;
+    for FILE in makemkv-bin-${VERSION}.tar.gz makemkv-oss-${VERSION}.tar.gz
+    do
+        if [ -e ${FILE} ]
+        then
+            echo "File already downloaded: ${FILE}" >&2
+            continue
+        else
+            echo "Fetching ${FILE}"
+            wget --progress=dot "http://www.makemkv.com/download/${FILE}"
+        fi
+    done
+}
 
-wget --progress=dot "http://www.makemkv.com/download/makemkv-bin-${1}.tar.gz" "http://www.makemkv.com/download/makemkv-oss-${1}.tar.gz"
+function install_latest_build_deps(){
+    echo "Installing pre-requisites using sudo apt-get line in MakeMKV forum thread"
+    $(curl --location 'http://www.makemkv.com/forum2/viewtopic.php?f=3&t=224' | \
+        sed -ne '/sudo apt-get/{s/^.*\(sudo apt-get [^<]*\).*$/\1/;p;q0}')
+}
 
-echo "Compiling v$1"
-for suffix in bin oss
-do
-    tar zxvf makemkv-${suffix}-${1}.tar.gz
-    pushd makemkv-${suffix}-${1}
-    mkdir -p tmp
-    echo "accepted" > tmp/eula_accepted
-    make -f makefile.linux
-    popd
-done
+function compile(){
+    VERSION=$1
+    CORE_COUNT=$(grep processor /proc/cpuinfo | wc -l)
 
-echo "Installing v$1"
-for suffix in bin oss
-do
-    pushd makemkv-${suffix}-${1}
-    sudo make -f makefile.linux install
-    popd
-done
+    echo "Compiling v${VERSION}"
+    for SUFFIX in bin oss
+    do
+        tar zxvf makemkv-${SUFFIX}-${VERSION}.tar.gz
+        pushd makemkv-${SUFFIX}-${VERSION}
+        mkdir -p tmp
+        echo "accepted" > tmp/eula_accepted
+        nice make -j ${CORE_COUNT} -f makefile.linux
+        popd
+    done
+}
+
+function install(){
+    VERSION=$1
+    echo "Installing v${VERSION}"
+    for SUFFIX in bin oss
+    do
+        pushd makemkv-${SUFFIX}-${VERSION}
+        sudo make -f makefile.linux install
+        popd
+    done
+}
+
+
+install_latest_build_deps
+download_sources ${VERSION}
+compile ${VERSION}
+install ${VERSION}
